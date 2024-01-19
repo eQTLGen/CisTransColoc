@@ -1,0 +1,24 @@
+name: pqtlvseqtl
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+  - r
+  - anaconda
+dependencies:
+  - conda-forge::r-devtools=2.4.4
+  - conda-forge::r-data.table=1.14.2
+  - conda-forge::r-tidyverse=1.3.2
+  - conda-forge::r-argparse
+  - conda-forge::r-cairo
+  - conda-forge::r-patchwork
+  - conda-forge::r-shape
+  - conda-forge::r-arrow
+  - bioconda::tabix=0.2.6
+  - coreutils=9.1
+  - sed=4.8
+  - conda-forge::gmp
+  - mpfr=4.1.0
+  - bioconda::bioconductor-rtracklayer
+  - conda-forge::r-r.utils=2.12.0
+prefix: ./GwasHyprColoc
