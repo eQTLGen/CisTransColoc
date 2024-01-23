@@ -44,20 +44,6 @@ message(paste("Reference read"))
 message("Reading in sig. results...")
 sig <- fread(args$sig_res, key = "SNP")
 
-message("Filter input to predefined cis genes.")
-cis_filter <- fread(args$cis_gene_filter, header = FALSE)
-
-if(nrow(cis_filter) > 0) {
-
-    sig <- sig[phenotype %in% cis_filter$V1]
-    message(paste("Cis-gene filter active:", length(unique(cis_filter$V1)), "genes."))
-
-}else{
-
-    message("No cis-gene filtering done.")
-
-}
-
 sig <- merge(sig, ref[, c(1:3), with = FALSE], by.x = "SNP", by.y = "ID")
 message(paste("Sig. results read"))
 
@@ -114,6 +100,20 @@ filter(abs(Z) == max(abs(Z))) %>%
 mutate(region_start = tss - args$cis_win,
 region_end = tss + args$cis_win) %>% as.data.table()
 
+message("Filter input to predefined cis genes.")
+cis_filter <- fread(args$cis_gene_filter, header = FALSE)
+
+if(nrow(cis_filter) > 0) {
+
+    cis_genes <- cis_genes[phenotype %in% cis_filter$V1]
+    message(paste("Cis-gene filter active:", length(unique(cis_filter$V1)), "genes."))
+
+}else{
+
+    message("No cis-gene filtering done.")
+
+}
+
 Lead2 <- as.data.table(Lead2)
 cis_genes <- as.data.table(cis_genes)
 
@@ -139,6 +139,9 @@ end = trans_genes$snp_end)
 trans_genes$chr <- as.factor(trans_genes$chr)
 setkey(trans_genes, chr, start, end)
 
+print(head(cis_genes))
+print(head(trans_genes))
+
 cis_overlaps <- foverlaps(trans_genes, cis_genes, type = "within", nomatch = NULL)
 
 cis_overlaps <- cis_overlaps[, .(cis_gene = unique(cis_gene), cis_SNP = unique(cis_SNP), 
@@ -154,7 +157,9 @@ ref$chr <- as.factor(ref$chr)
 setkey(ref, chr, start, end)
 
 
-if (length(cis_overlaps$cis_gene) <= 1000){batches = 1}else{
+if (length(cis_overlaps$cis_gene) <= 1000){
+batches = 1
+}else{
 batches <- c(seq(from = 1, to = length(cis_overlaps$cis_gene), by = 1000), length(cis_overlaps$cis_gene))
 }
 
@@ -168,17 +173,28 @@ message(paste0("Iteratively finding overlapping variants in ", length(batches), 
 for (i in 1:length(batches)){
 
 message(paste0("Overlapping batch ", i, "..."))
-if(i < length(batches) & i > 1){
-    temp_cis_overlaps <- cis_overlaps[batches[i]:batches[i+1]]
+if(i < length(batches) & length(batches) > 1){
+        temp_cis_overlaps <- cis_overlaps[batches[i]:batches[i+1]]
+        print(head(temp_cis_overlaps))
+        message("Multiple batches")
     } else if(length(batches) == 1 & i == 1){
         temp_cis_overlaps <- cis_overlaps
-    } else {
+        print(head(temp_cis_overlaps))
+        message("Single batch")
+    } else if(length(batches) > 1 & i == 1){
+        temp_cis_overlaps <- cis_overlaps[batches[i]]
+        print(head(temp_cis_overlaps))
+        message("Multiple batches")
+    }
+    else {
         message("Debug!")
         }
 
 print(head(temp_cis_overlaps))
 
 ref_temp <- ref[chr %in% temp_cis_overlaps$chr]
+
+head(temp_cis_overlaps[, -c(1, 4), with = FALSE])
 
 overlap_temp <- foverlaps(ref_temp, temp_cis_overlaps[, -c(1, 4), with = FALSE], type = "within", nomatch = NULL)
 

@@ -39,6 +39,7 @@ process Coloc {
         --gene_id ${gene} \
         --loci ${loci} \
         --eqtl_folder ${eqtls} \
+        --gtf ${gtf} \
         --output ${gene}_coloc.txt
         """
 }

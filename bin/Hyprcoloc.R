@@ -7,19 +7,26 @@ library(arrow)
 library(stringr)
 library(IGUtilityPackage)
 library(ggplot2)
+library(tidyr)
+library(rtracklayer)
 
 parser <- ArgumentParser(description = 'Run HyprColoc for every cis-eQTL locus to detect colocalisation between cis- and trans-eQTL.')
-parser$add_argument('--loci', metavar = 'file', type = 'character', help = 'R data file which contains cis genes, trans genes and variants.')
-parser$add_argument('--gene_id', type = 'character', help = 'ENSEMBL Gene ID for which to run the analysis.')
-parser$add_argument('--eqtl_folder', metavar = 'file', type = 'character', help = 'eQTLGen parquet folder format with per gene output files.')
-parser$add_argument('--output', metavar = 'file', type = 'character', help = 'Output file.')
+
+parser$add_argument('--loci', metavar = 'file', type = 'character', 
+help = 'R data file which contains cis genes, trans genes and variants.')
+parser$add_argument('--gene_id', type = 'character', 
+help = 'ENSEMBL Gene ID for which to run the analysis.')
+parser$add_argument('--eqtl_folder', metavar = 'file', type = 'character', 
+help = 'eQTLGen parquet folder format with per gene output files.')
+parser$add_argument('--gtf', metavar = 'file', type = 'character',
+                    help = "ENSEMBL .gtf file, needs to be hg38.")
+parser$add_argument('--output', metavar = 'file', type = 'character', 
+help = 'Output file.')
 #parser$add_argument('--locusplot', type = 'logical', action = 'store_false')
-#parser$add_argument('--ref', metavar = 'file', type = 'character')
 
 args <- parser$parse_args()
 
 # Functions
-
 ParseInput <- function(inp_folder, loci, gene){
   
   message("Reading locus info...")
@@ -154,8 +161,28 @@ res[str_detect(traits, cis_eQTL_gene)]$type <- "cis-trans"
 res[, traits := list(strsplit(traits, ",", fixed = TRUE))]
 res$nr_snps_included <- nrow(inputs$betas)
 
-fwrite(res, args$output, sep = "\t")
+message("Annotating results...")
+gtf <- readGFF(args$gtf)
+gtf <- as.data.table(unique(gtf[, c(9, 11)]))
 
+res <- res %>% 
+separate_rows(traits, sep = "\\| ")
+
+res <- merge(res, gtf, by.x = "cis_eQTL_gene", by.y = "gene_id", all.x = TRUE)
+
+res <- res[, c(1, 11, 2:10)]
+colnames(res)[2] <- "cis_eQTL_gene_name"
+
+res <- merge(res, gtf, by.x = "traits", by.y = "gene_id", all.x = TRUE)
+res <- res[, c(2:5, 1, 12, 6:11)]
+colnames(res)[c(5, 6)] <- c("trans_eQTL_gene", "trans_eQTL_gene_name")
+res <- res[order(res$cis_eQTL_gene, res$type, res$iteration), ]
+res <- res[res$cis_eQTL_gene != res$trans_eQTL_gene, ]
+
+message("Done!")
+message("Writing output...")
+fwrite(res, args$output, sep = "\t")
+message("Done!")
 #visualise
 #if (isTRUE(args$locusplot)){
 #VisualiseLocus(inp = inputs, reference = args$ref)
