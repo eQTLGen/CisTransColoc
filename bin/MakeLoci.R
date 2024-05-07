@@ -27,7 +27,13 @@ parser$add_argument('--trans_win', type = 'numeric', default = 5000000,
                     help = 'Distance threshold to declare variant trans.')
 parser$add_argument('--p_thresh', type = 'numeric', default = 5e-8,
                     help = 'P-value threshold for significant effects.')
- parser$add_argument('--cis_gene_filter', metavar = 'file', type = 'character',
+parser$add_argument('--i2_thresh', type = 'numeric', default = 40,
+                    help = 'Heterogeneity threshold. Defaults to <40%.')
+parser$add_argument('--maxN_thresh', type = 'numeric', default = 0.8,
+                    help = 'Per gene maximal sample size threshold. Defaults to 0.8 (SNPs with >=0.8*max(N))')
+parser$add_argument('--minN_thresh', type = 'numeric', default = 0,
+                    help = 'Minimal sample size threshold. Defaults to 0 (no filtering)')
+parser$add_argument('--cis_gene_filter', metavar = 'file', type = 'character',
                      help = 'File for filtering cis-eQTL genes included to analysis.')
 # parser$add_argument('--max_lead_distance', type = 'numeric', default = 250000,
 #                     help = 'Maximum distance between primary cis and trans lead variants.')
@@ -43,6 +49,12 @@ message(paste("Reference read"))
 
 message("Reading in sig. results...")
 sig <- fread(args$sig_res, key = "SNP")
+
+sig <- sig %>% 
+    filter(i_squared < args$i2_thresh | is.na(i_squared)) %>% 
+    group_by(phenotype) %>% 
+    filter(N >= args$maxN_thresh * max(N) & N >= args$minN_thresh) %>% 
+    as.data.table()
 
 sig <- merge(sig, ref[, c(1:3), with = FALSE], by.x = "SNP", by.y = "ID")
 message(paste("Sig. results read"))

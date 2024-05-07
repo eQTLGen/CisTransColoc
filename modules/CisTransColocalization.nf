@@ -6,10 +6,10 @@ process MakeLoci {
     publishDir "${params.OutputDir}", mode: 'copy', overwrite: true, pattern: "cis_trans_info.txt"
 
     input:
-        tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh)
+        tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN)
 
     output:
-       tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), path("cis_trans_info.txt")
+       tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), path("cis_trans_info.txt")
 
     script:
         """
@@ -22,13 +22,16 @@ process MakeLoci {
         --cis_win ${cis_win} \
         --trans_win ${trans_win} \
         --p_thresh ${p_thresh} \
+        --i2_thresh ${i2} \
+        --maxN_thresh ${maxN} \
+        --minN_thresh ${minN} \
         --cis_gene_filter ${cis_filter}
         """
 }
 
 process Coloc {
     input:
-        tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), path(loci), val(gene)
+        tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), path(loci), val(gene)
 
     output:
         path("*_coloc.txt")
@@ -37,6 +40,9 @@ process Coloc {
         """
         Hyprcoloc.R \
         --gene_id ${gene} \
+        --i2_thresh ${i2} \
+        --maxN_thresh ${maxN} \
+        --minN_thresh ${minN} \
         --loci ${loci} \
         --eqtl_folder ${eqtls} \
         --gtf ${gtf} \

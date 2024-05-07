@@ -20,6 +20,12 @@ parser$add_argument('--eqtl_folder', metavar = 'file', type = 'character',
 help = 'eQTLGen parquet folder format with per gene output files.')
 parser$add_argument('--gtf', metavar = 'file', type = 'character',
                     help = "ENSEMBL .gtf file, needs to be hg38.")
+parser$add_argument('--i2_thresh', type = 'numeric', default = 40,
+                    help = 'Heterogeneity threshold. Defaults to <40%.')
+parser$add_argument('--maxN_thresh', type = 'numeric', default = 0.8,
+                    help = 'Per gene maximal sample size threshold. Defaults to 0.8 (SNPs with >=0.8*max(N))')
+parser$add_argument('--minN_thresh', type = 'numeric', default = 0,
+                    help = 'Minimal sample size threshold. Defaults to 0 (no filtering)')
 parser$add_argument('--output', metavar = 'file', type = 'character', 
 help = 'Output file.')
 #parser$add_argument('--locusplot', type = 'logical', action = 'store_false')
@@ -58,6 +64,7 @@ ParseInput <- function(inp_folder, loci, gene){
 
   message("Done!")
   eqtls <- eqtls %>% filter(variant %in% !!snps) %>% 
+    filter((i_squared < !!args$i2_thresh | is.na(i_squared)) & sample_size >= args$maxN_thresh * max(sample_size) & sample_size >= args$minN_thresh) %>% 
     collect() %>% 
     as.data.table()
   setkey(eqtls, variant)
@@ -72,24 +79,32 @@ ParseInput <- function(inp_folder, loci, gene){
   
   # Read iteratively in trans-eGenes
   message(paste(length(genes), "overlapping trans-eQTL genes"))
+  genes_h <- genes
   for (i in 1:length(genes)){
   message(paste("Read", genes[i]))
   eqtls <- read_parquet(list.files(paste0(args$eqtl_folder, "/phenotype=", genes[i]), full.names = TRUE))
   eqtls2 <- eqtls %>% filter(variant %in% !!snps) %>% 
+    filter((i_squared < !!args$i2_thresh | is.na(i_squared)) & sample_size >= args$maxN_thresh * max(sample_size) & sample_size >= args$minN_thresh) %>% 
     select(variant, beta, standard_error) %>%
     collect() %>% 
     as.data.table()
   setkey(eqtls2, variant)
   
+  if(nrow(eqtls2) > 100){ #So that there are at least some variants reasonable to run.
+
   colnames(eqtls2)[2:3] <- paste0(genes[i], "_",  colnames(eqtls2)[2:3])
   print(nrow(eqtls2))
   
   eqtl_beta <- merge(eqtl_beta, eqtls2[, -3, with = FALSE], by = "variant")
   eqtl_se <- merge(eqtl_se, eqtls2[, -2, with = FALSE], by = "variant")
   message(paste0(i, "/", length(genes)))
+  } else {
+    message("Does not make sense to include: <100 variants after filters!")
+    genes_h <- genes_h[-i]
+    }
   }
-  colnames(eqtl_beta) <- c("SNP", gene, genes)
-  colnames(eqtl_se) <- c("SNP", gene, genes)
+  colnames(eqtl_beta) <- c("SNP", gene, genes_h)
+  colnames(eqtl_se) <- c("SNP", gene, genes_h)
   
   snplist <- eqtl_beta$SNP
   
@@ -129,10 +144,9 @@ VisualiseLocus <- function(inp, reference, res){
     geom_vline(xintercept = lead_var_pos, colour = "red")
   
 }
+
 # Prepare inputs
-
 inputs <- ParseInput(inp_folder = args$eqtl_folder, loci = args$loci, gene = args$gene)
-
 
 ###########################
 # Analyse cis-eQTL regions#
@@ -166,7 +180,8 @@ gtf <- readGFF(args$gtf)
 gtf <- as.data.table(unique(gtf[, c(9, 11)]))
 
 res <- res %>% 
-separate_rows(traits, sep = "\\| ")
+separate_rows(traits, sep = "\\| ") %>% 
+mutate(traits = str_trim(traits))
 
 res <- merge(res, gtf, by.x = "cis_eQTL_gene", by.y = "gene_id", all.x = TRUE)
 

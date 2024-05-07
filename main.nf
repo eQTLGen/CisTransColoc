@@ -12,7 +12,7 @@ log.info"""
 
 CisTransColocalisation v${workflow.manifest.version}"
 ===========================================================
-Pipeline for running HyprColoc colocalisation analyses (https://www.nature.com/articles/s41467-020-20885-8) between cis- and trans-eQTL loci in eQTLGen eQTL datasets.
+Pipeline for running HyprColoc colocalisation analyses (https://www.nature.com/articles/s41467-020-20885-8) between cis- and trans-eQTL loci in eQTLGen eQTL summary statistics.
 
 Usage:
 
@@ -34,6 +34,9 @@ Optional arguments:
 --cis_window                cis-eQTL window. Defaults to 1000000.
 --trans_window              trans-eQTL window. Defaults to 5000000.
 --p_thresh                  P-value threshold for significant effects. Defaults to 5e-8.
+--i2_thresh                 Heterogeneity threshold. Defaults to 40 (<40%).
+--maxN_thresh               Per gene mimaximal sample size threshold. Defaults to 0.8 (SNPs with >=0.8*max(N))
+--minN_thresh               Minimal sample size threshold. Defaults to 0 (no filtering)
 --cis_gene_filter           Optional filter for the cis-eQTL genes. By default, all genes are queried.
 """.stripIndent()
 
@@ -50,6 +53,9 @@ params.leadvar_window = 1000000
 params.cis_window = 1000000
 params.trans_window = 5000000
 params.p_thresh = 5e-8
+params.i2_thresh = 40
+params.maxN_thresh = 0.8
+params.minN_thresh = 0
 params.cis_gene_filter = 'data/help_input.txt'
 
 
@@ -75,6 +81,9 @@ summary['Pruning window']                           = params.leadvar_window
 summary['cis-eQTL window']                          = params.cis_window
 summary['trans-eQTL window']                        = params.trans_window
 summary['P threshold']                              = params.p_thresh
+summary['I2 threshold']                              = params.i2_thresh
+summary['maxN threshold']                            = params.maxN_thresh
+summary['minN threshold']                            = params.minN_thresh
 
 // import modules
 include { MAKELOCI; COLOC; MakeLoci; Coloc } from './modules/CisTransColocalization.nf'
@@ -97,8 +106,12 @@ leadvar_window = Channel.value(params.leadvar_window)
 cis_window = Channel.value(params.cis_window)
 trans_window = Channel.value(params.trans_window)
 p_thresh = Channel.value(params.p_thresh)
+i2_thresh = Channel.value(params.i2_thresh)
+maxN_thresh = Channel.value(params.maxN_thresh)
+minN_thresh = Channel.value(params.minN_thresh)
 
-input_ch = input_ch.combine(leadvar_window).combine(cis_window).combine(trans_window).combine(p_thresh)
+input_ch = input_ch.combine(leadvar_window).combine(cis_window).combine(trans_window)
+.combine(p_thresh).combine(i2_thresh).combine(maxN_thresh).combine(minN_thresh)
 
 
 workflow {
@@ -117,7 +130,6 @@ workflow {
         
         COLOC(coloc_input_ch)
         COLOC.out.flatten().collectFile(name: 'CisTransColocResults.txt', keepHeader: true, sort: true, storeDir: "${params.OutputDir}")
-
         }
 
 
