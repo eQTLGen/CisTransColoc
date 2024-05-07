@@ -35,7 +35,7 @@ Optional arguments:
 --trans_window              trans-eQTL window. Defaults to 5000000.
 --p_thresh                  P-value threshold for significant effects. Defaults to 5e-8.
 --i2_thresh                 Heterogeneity threshold. Defaults to 40 (<40%).
---maxN_thresh               Per gene mimaximal sample size threshold. Defaults to 0.8 (SNPs with >=0.8*max(N))
+--maxN_thresh               Per gene maximal sample size threshold to include variants. Defaults to 0.8 (SNPs with >=0.8*max(N))
 --minN_thresh               Minimal sample size threshold. Defaults to 0 (no filtering)
 --cis_gene_filter           Optional filter for the cis-eQTL genes. By default, all genes are queried.
 """.stripIndent()

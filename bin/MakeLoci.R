@@ -42,30 +42,33 @@ args <- parser$parse_args()
 
 
 message("Reading in reference...")
-ref <- arrow::open_dataset(args$reference) %>% 
-select("ID", "CHR", "bp", "str_allele1", "str_allele2") %>% collect() %>% as.data.table()
 
-message(paste("Reference read"))
+ref <- arrow::read_parquet(args$reference)
+ref <- ref %>% select("ID", "CHR", "bp", "str_allele1", "str_allele2") %>% as.data.table()
+
+message("Reading in reference...done!")
 
 message("Reading in sig. results...")
 sig <- fread(args$sig_res, key = "SNP")
 
 sig <- sig %>% 
-    filter(i_squared < args$i2_thresh | is.na(i_squared)) %>% 
+    filter(P < args$p_thresh & (i_squared < args$i2_thresh | is.na(i_squared))) %>% 
     group_by(phenotype) %>% 
     filter(N >= args$maxN_thresh * max(N) & N >= args$minN_thresh) %>% 
     as.data.table()
 
+message(paste(nrow(sig), "rows among significant results"))
+
 sig <- merge(sig, ref[, c(1:3), with = FALSE], by.x = "SNP", by.y = "ID")
-message(paste("Sig. results read"))
+message(paste(nrow(sig), "rows among significant results, after merging with reference"))
+message("Reading in sig. results...done!")
 
-
-message("Done")
 message("Filter results to genes available in full files...")
 eqtl_genes <- str_replace(list.files(args$eqtl), ".*phenotype=", "")
 sig <- sig[phenotype %in% eqtl_genes]
-message(length(unique(sig$phenotype)))
-message("Done!")
+message(paste(length(unique(sig$phenotype)), "genes in full results"))
+if (length(unique(sig$phenotype)) < 2){stop("Less than two genes in the full results, terminating.")}
+message("Filter results to genes available in full files...done!")
 
 message("Finding lead variants for each gene...")
 LeadVariants <- sig %>% 
@@ -80,13 +83,15 @@ LeadVariants <- sig %>%
     se_col = "se", 
     p_col = "P", 
     window = args$lead_variant_win))
-message(paste("Lead variants found"))
+
+message(paste(nrow(LeadVariants), "loci"))    
+message("Finding lead variants for each gene...done!")
 
 rm(sig)
 gc()
 
 # Annotate cis/trans
-message("Annotating lead variants cis/trans...")
+message("Annotating lead variants to cis/trans...")
 ensg <- readGFF(args$gtf)
 ensg <- as.data.table(ensg)
 ensg <- ensg[type == "gene"]
@@ -97,9 +102,9 @@ ensg <- ensg[, c(9, 1, 27), with = FALSE]
 Lead2 <-  merge(LeadVariants, ensg, by.x = "phenotype", by.y = "gene_id")
 Lead2$type <- "cis"
 Lead2[Lead2$chr != Lead2$seqid | abs(Lead2$pos - Lead2$tss) > args$trans_win, ]$type <- "trans"
-Lead2 <- Lead2[Lead2$type == "cis" | (Lead2$type == "trans" & Lead2$P < 1e-12), ]
+Lead2 <- Lead2[Lead2$type == "cis" | (Lead2$type == "trans" & Lead2$P < args$p_thresh), ]
 
-message(paste("Lead variants annotated"))
+message("Annotating lead variants cis/trans...done!")
 
 # For every cis locus find overlapping trans loci
 message("Finding overlapping trans loci...")
@@ -161,13 +166,12 @@ cis_overlaps <- cis_overlaps[, .(cis_gene = unique(cis_gene), cis_SNP = unique(c
                                  start = unique(start), end = unique(end)), by = cis_gene]
 
 setkey(cis_overlaps, chr, start, end)
-message("Overlapping trans loci found")
+message("Finding overlapping trans loci...done!")
 
 ref <- data.table(SNP = ref$ID, chr = ref$CHR, start = ref$bp, 
 end = ref$bp + 1)
 ref$chr <- as.factor(ref$chr)
 setkey(ref, chr, start, end)
-
 
 if (length(cis_overlaps$cis_gene) <= 1000){
 batches = 1
@@ -220,4 +224,4 @@ message(paste0("Done"))
 res <- merge(cis_overlaps[, c(3, 2, 4), with = FALSE], res, by = "cis_SNP")
 message("Saving results...")
 fwrite(res, file = "cis_trans_info.txt")
-message("Done")
+message("Saving results...done!")

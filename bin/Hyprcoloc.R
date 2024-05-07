@@ -47,7 +47,7 @@ ParseInput <- function(inp_folder, loci, gene){
   message("Parse trans-eQTL genes")
   genes <- unlist(strsplit(loci$trans_genes, "|", fixed = TRUE))
   
-  # Include only those trans-eQTLs that are present in input folder
+  # Include only those trans-eQTL genes that are present in input folder
   available_genes <- str_replace(list.files(inp_folder), ".*phenotype=", "")
   genes <- genes[genes %in% available_genes]
   message("Done!")
