@@ -19,26 +19,26 @@
 
 set -f
 
-nextflow_path=[path to nextflow executable]
+nextflow_path=[path to Nextflow executable]
 
-eqtls=[path to eQTL folder]
-allele_info=[path to allele info .parquet]
-pqtls=[path to pQTL folder]
-pqtls_meta=[pQTL meta-table]
-
-genes=[table with genes]
-gtf=[path to annotation gtf]
-
+empirical=[path to full eQTL files in .parquet format]
+sig=[path to significant eQTL file in txt/txt.gz format]
+ref=[path to SNP reference file in .parquet format]
+gtf=[path to ENSEMBL .gtf file for cis/trans classification]
 output_folder=[output folder]
 
 NXF_VER=23.04.1 ${nextflow_path}/nextflow run main.nf \
---outdir ${output_folder} \
---eqtl_files ${empirical}/eqtls \
---pqtl_files ${pqtls} \
---allele_info ${allele_info} \
---pqtl_meta_table ${pqtls_meta} \
---genes ${genes} \
+--sig_eqtls ${sig} \
+--eqtl_files ${empirical} \
+--allele_info ${ref} \
 --gtf ${gtf} \
---ManhattanPlots true \
--resume \
--profile singularity,slurm
+--p_thresh 5e-8 \
+--OutputDir ${output_folder} \
+--minN_thresh 6000 \
+--maxN_thresh 0.5 \
+--i2_thresh 100 \
+--leadvar_window  500000 \
+--cis_window 500000 \
+-profile docker \
+-resume
+
