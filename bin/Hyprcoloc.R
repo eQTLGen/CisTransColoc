@@ -39,30 +39,30 @@ ParseInput <- function(inp_folder, loci, gene){
   
   loci <- fread(args$loci, sep2 = "|")
   setkey(loci, cis_gene)
-  message("Done!")
+  message("Reading locus info...done!")
   
   loci <- loci[loci$cis_gene == gene]
   
   # Parse trans-eGenes
-  message("Parse trans-eQTL genes")
+  message("Parsing trans-eQTL genes...")
   genes <- unlist(strsplit(loci$trans_genes, "|", fixed = TRUE))
   
   # Include only those trans-eQTL genes that are present in input folder
   available_genes <- str_replace(list.files(inp_folder), ".*phenotype=", "")
   genes <- genes[genes %in% available_genes]
-  message("Done!")
+  message("Parsing trans-eQTL genes...done!")
 
   # Parse SNP list
-  message("Parse SNP list")
+  message("Parsing SNP list...")
   snps <- unlist(strsplit(loci$SNPs, "|", fixed = TRUE))
-  message("Done!")
+  message("Parsing SNP list...done!")
 
   # Read in cis-eQTLs
-  message("Read parquet file...")
+  message("Reading parquet file...")
   #ds <- arrow::open_dataset(args$eqtl_folder, partitioning = "phenotype", hive_style = TRUE)
   eqtls <- read_parquet(list.files(paste0(args$eqtl_folder, "/phenotype=", args$gene_id), full.names = TRUE))
 
-  message("Done!")
+  message("Reading parquet file...done!")
   eqtls <- eqtls %>% filter(variant %in% !!snps) %>% 
     filter((i_squared < !!args$i2_thresh | is.na(i_squared)) & sample_size >= args$maxN_thresh * max(sample_size) & sample_size >= args$minN_thresh) %>% 
     collect() %>% 
@@ -114,7 +114,7 @@ ParseInput <- function(inp_folder, loci, gene){
   rownames(eqtl_se) <- snplist
   
   return(list(betas = eqtl_beta, standard_errors = eqtl_se))
-  message("Done!")
+  message("Make beta and se matrices...done!")
 }
 
 VisualiseLocus <- function(inp, reference, res){
@@ -160,7 +160,10 @@ res <- hyprcoloc(inputs$betas,
                  snp.id = rownames(inputs$betas),
                  sample.overlap = matrix(1, ncol = ncol(inputs$betas), nrow = ncol(inputs$betas))
                  )  
-message("Done!")
+
+print(res)
+
+message("Running hyprcoloc analysis...done!")
 res <- as.data.table(res$results)
 #res_temp <- res_temp[!res_temp$traits == "None", ]
 
@@ -194,12 +197,13 @@ colnames(res)[c(5, 6)] <- c("trans_eQTL_gene", "trans_eQTL_gene_name")
 res <- res[order(res$cis_eQTL_gene, res$type, res$iteration), ]
 res <- res[res$cis_eQTL_gene != res$trans_eQTL_gene, ]
 
-message("Done!")
+message("Annotating results...done!")
 message("Writing output...")
 fwrite(res, args$output, sep = "\t")
-message("Done!")
+message("Writing output...done!")
+
 #visualise
 #if (isTRUE(args$locusplot)){
 #VisualiseLocus(inp = inputs, reference = args$ref)
-#  ggsave(paste0(cis_eQTL_gene, ".pdf"), height = 15, width = 10, units = "in")
+#ggsave(paste0(cis_eQTL_gene, ".pdf"), height = 15, width = 10, units = "in")
 #}

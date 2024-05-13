@@ -30,6 +30,7 @@ process MakeLoci {
 }
 
 process Coloc {
+    tag "${gene}"
     input:
         tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), path(loci), val(gene)
 
