@@ -1,4 +1,4 @@
-# Pipeline for running colocalisation and other analyses between pQTLs and eQTLs
+# Pipeline for running colocalisation between cis- and trans-eQTLs
 
 ## TBA 
 
