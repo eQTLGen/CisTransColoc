@@ -44,8 +44,8 @@ args <- parser$parse_args()
 message("Reading in reference...")
 
 ref <- arrow::read_parquet(args$reference)
-ref <- ref %>% select("ID", "CHR", "bp", "str_allele1", "str_allele2") %>% as.data.table()
-
+ref <- data.table(ref, key = "ID")
+ref <- ref[, c(1, 5, 2, 3, 4), with = FALSE]
 message("Reading in reference...done!")
 
 message("Reading in sig. results...")
