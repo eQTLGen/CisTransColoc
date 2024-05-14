@@ -166,7 +166,9 @@ VisualiseLocus <- function(inp, reference, res){
 # Prepare inputs
 inputs <- ParseInput(inp_folder = args$eqtl_folder, loci = args$loci, gene = args$gene)
 
-if (ncol(inputs$betas < 2)) {
+message(inputs)
+
+if (ncol(inputs$betas) < 2) {
 
 res <- data.table(cis_eQTL_gene = NA,
 cis_eQTL_gene_name = NA,
