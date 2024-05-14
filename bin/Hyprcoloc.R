@@ -194,9 +194,14 @@ message("Writing empty output file...done!")
 ###########################
 
 trait_names <- colnames(inputs$betas)
+
+# Remove rows where SE is 0
+# TODO: check why such variants are in the results
+any_row_contains_zero <- apply(inputs$standard_errors, 1, function(row) any(row != 0))
+
 message("Running hyprcoloc analysis...")
-res <- hyprcoloc(inputs$betas, 
-                 inputs$standard_errors, 
+res <- hyprcoloc(inputs$betas[any_row_contains_zero, ], 
+                 inputs$standard_errors[any_row_contains_zero, ], 
                  trait.names = colnames(inputs$betas), 
                  snp.id = rownames(inputs$betas),
                  sample.overlap = matrix(1, ncol = ncol(inputs$betas), nrow = ncol(inputs$betas))
