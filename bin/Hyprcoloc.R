@@ -41,7 +41,7 @@ ParseInput <- function(inp_folder, loci, gene){
   setkey(loci, cis_gene)
   message("Reading locus info...done!")
   
-  loci <- loci[loci$cis_gene == gene]
+  loci <- loci[cis_gene == gene]
   
   # Parse trans-eGenes
   message("Parsing trans-eQTL genes...")
@@ -60,15 +60,16 @@ ParseInput <- function(inp_folder, loci, gene){
   # Read in cis-eQTLs
   message("Reading parquet file...")
   #ds <- arrow::open_dataset(args$eqtl_folder, partitioning = "phenotype", hive_style = TRUE)
-  eqtls <- read_parquet(list.files(paste0(args$eqtl_folder, "/phenotype=", args$gene_id), full.names = TRUE))
+  eqtls <- arrow::open_dataset(list.files(paste0(args$eqtl_folder, "/phenotype=", args$gene_id), full.names = TRUE))
 
-  message("Reading parquet file...done!")
-  eqtls <- eqtls %>% filter(variant %in% !!snps) %>% 
-    filter((i_squared < !!args$i2_thresh | is.na(i_squared)) & sample_size >= args$maxN_thresh * max(sample_size) & sample_size >= args$minN_thresh) %>% 
-    collect() %>% 
-    as.data.table()
-  setkey(eqtls, variant)
-  
+  eqtls <- eqtls %>% 
+  filter(variant %in% snps) %>% 
+  collect() %>%
+  filter((i_squared < args$i2_thresh | is.na(i_squared)) & 
+  sample_size >= args$maxN_thresh * max(sample_size) & 
+  sample_size >= args$minN_thresh) %>% 
+  as.data.table()
+
   message("cis-eQTLs read in!")
   message(paste(nrow(eqtls), "variants in the data!"))
   
@@ -76,18 +77,30 @@ ParseInput <- function(inp_folder, loci, gene){
   message("Make beta and se matrices...")
   eqtl_beta <- data.table(variant = eqtls$variant, eqtls$beta)
   eqtl_se <- data.table(variant = eqtls$variant, eqtls$standard_error)
-  
+
+  rm(eqtls)
+  gc()
+
+  if (nrow(eqtl_beta) >= 100){
   # Read iteratively in trans-eGenes
   message(paste(length(genes), "overlapping trans-eQTL genes"))
   genes_h <- genes
   for (i in 1:length(genes)){
   message(paste("Read", genes[i]))
-  eqtls <- read_parquet(list.files(paste0(args$eqtl_folder, "/phenotype=", genes[i]), full.names = TRUE))
-  eqtls2 <- eqtls %>% filter(variant %in% !!snps) %>% 
-    filter((i_squared < !!args$i2_thresh | is.na(i_squared)) & sample_size >= args$maxN_thresh * max(sample_size) & sample_size >= args$minN_thresh) %>% 
-    select(variant, beta, standard_error) %>%
-    collect() %>% 
-    as.data.table()
+
+  #eqtls2 <- read_parquet(list.files(paste0(args$eqtl_folder, "/phenotype=", genes[i]), full.names = TRUE))
+  eqtls2 <- open_dataset(list.files(paste0(args$eqtl_folder, "/phenotype=", genes[i]), full.names = TRUE))
+
+  eqtls2 <- eqtls2 %>% 
+  filter(variant %in% snps) %>% 
+  collect() %>% 
+  filter((i_squared < args$i2_thresh | is.na(i_squared)) & 
+  sample_size >= args$maxN_thresh * max(sample_size) & 
+  sample_size >= args$minN_thresh) %>% 
+  select(variant, beta, standard_error) %>% 
+  collect() %>% 
+  as.data.table()
+
   setkey(eqtls2, variant)
   
   if(nrow(eqtls2) > 100){ #So that there are at least some variants reasonable to run.
@@ -99,13 +112,18 @@ ParseInput <- function(inp_folder, loci, gene){
   eqtl_se <- merge(eqtl_se, eqtls2[, -2, with = FALSE], by = "variant")
   message(paste0(i, "/", length(genes)))
   } else {
-    message("Does not make sense to include: <100 variants after filters!")
-    genes_h <- genes_h[-i]
+    message("Does not make sense to include trans-gene: <100 variants after filters!")
+    genes_h <- genes_h[genes_h != genes[i]]
     }
+  gc()
   }
   colnames(eqtl_beta) <- c("SNP", gene, genes_h)
   colnames(eqtl_se) <- c("SNP", gene, genes_h)
-  
+  } else {
+  message("Does not make sense to include cis-gene: <100 variants after filters!")
+  colnames(eqtl_beta) <- c("SNP", gene)
+  colnames(eqtl_se) <- c("SNP", gene)
+  }
   snplist <- eqtl_beta$SNP
   
   eqtl_beta <- as.matrix(eqtl_beta[, -1, with = FALSE])
@@ -148,6 +166,27 @@ VisualiseLocus <- function(inp, reference, res){
 # Prepare inputs
 inputs <- ParseInput(inp_folder = args$eqtl_folder, loci = args$loci, gene = args$gene)
 
+if (ncol(inputs$betas < 2)) {
+
+res <- data.table(cis_eQTL_gene = NA,
+cis_eQTL_gene_name = NA,
+type = NA,
+iteration = NA,
+trans_eQTL_gene = NA,
+trans_eQTL_gene_name = NA,
+posterior_prob = NA,
+regional_prob = NA,
+candidate_snp = NA,
+posterior_explained_by_snp = NA,
+dropped_trait = NA,
+nr_snps_included = NA
+)[-1]
+
+message("Writing empty output file...")
+fwrite(res, args$output, sep = "\t")
+message("Writing empty output file...done!")
+} else {
+
 ###########################
 # Analyse cis-eQTL regions#
 ###########################
@@ -165,7 +204,6 @@ print(res)
 
 message("Running hyprcoloc analysis...done!")
 res <- as.data.table(res$results)
-#res_temp <- res_temp[!res_temp$traits == "None", ]
 
 res <- data.table(cis_eQTL_gene = trait_names[1], 
                        type = "trans-trans", 
@@ -207,3 +245,4 @@ message("Writing output...done!")
 #VisualiseLocus(inp = inputs, reference = args$ref)
 #ggsave(paste0(cis_eQTL_gene, ".pdf"), height = 15, width = 10, units = "in")
 #}
+}

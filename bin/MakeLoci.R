@@ -41,27 +41,34 @@ parser$add_argument('--cis_gene_filter', metavar = 'file', type = 'character',
 args <- parser$parse_args()
 
 
-message("Reading in reference...")
-
-ref <- arrow::read_parquet(args$reference)
-ref <- data.table(ref, key = "ID")
-ref <- ref[, c(1, 5, 2, 3, 4), with = FALSE]
-message("Reading in reference...done!")
 
 message("Reading in sig. results...")
 sig <- fread(args$sig_res, key = "SNP")
+sig <- sig[P < args$p_thresh & (i_squared < args$i2_thresh | is.na(i_squared))]
 
 sig <- sig %>% 
-    filter(P < args$p_thresh & (i_squared < args$i2_thresh | is.na(i_squared))) %>% 
     group_by(phenotype) %>% 
     filter(N >= args$maxN_thresh * max(N) & N >= args$minN_thresh) %>% 
     as.data.table()
 
 message(paste(nrow(sig), "rows among significant results"))
 
+message("Reading in sig. results...done!")
+
+message("Reading in reference...")
+
+ref <- arrow::open_dataset(args$reference)
+
+ref <- ref %>% 
+    filter(ID %in% !!sig$SNP) %>% 
+    collect()
+
+ref <- data.table(ref, key = "ID")
+ref <- ref[, c(1, 5, 2, 3, 4), with = FALSE]
+message("Reading in reference...done!")
+
 sig <- merge(sig, ref[, c(1:3), with = FALSE], by.x = "SNP", by.y = "ID")
 message(paste(nrow(sig), "rows among significant results, after merging with reference"))
-message("Reading in sig. results...done!")
 
 message("Filter results to genes available in full files...")
 eqtl_genes <- str_replace(list.files(args$eqtl), ".*phenotype=", "")
@@ -100,7 +107,8 @@ ensg[strand == "-"]$tss <- ensg[strand == "-"]$end
 ensg <- ensg[, c(9, 1, 27), with = FALSE]
 
 Lead2 <-  merge(LeadVariants, ensg, by.x = "phenotype", by.y = "gene_id")
-Lead2$type <- "cis"
+Lead2$type <- "interim"
+Lead2[Lead2$chr == Lead2$seqid | abs(Lead2$pos - Lead2$tss) < args$cis_win, ]$type <- "cis"
 Lead2[Lead2$chr != Lead2$seqid | abs(Lead2$pos - Lead2$tss) > args$trans_win, ]$type <- "trans"
 Lead2 <- Lead2[Lead2$type == "cis" | (Lead2$type == "trans" & Lead2$P < args$p_thresh), ]
 
