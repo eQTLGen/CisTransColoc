@@ -40,19 +40,6 @@ parser$add_argument('--cis_gene_filter', metavar = 'file', type = 'character',
 
 args <- parser$parse_args()
 
-args <- list(reference = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2/projectfiles/data/derived_data/2023-01-28_MetaAnalysis/data/1000G-30x.parquet",
-sig_res = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/input/SigResults/subset_p5e8_hyprColocFormat_2024-05-04.csv.gz",
-eqtl_folder = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/input/sumstats/",
-gtf = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/Homo_sapiens.GRCh38.108.gtf.gz",
-lead_variant_win = 1000000,
-cis_win = 1000000,
-trans_win = 5000000,
-p_thresh = 1e-12,
-i2_thresh = 0.4,
-maxN_thresh = 0.8,
-minN_thresh = 10000
-)
-
 message("Reading in sig. results...")
 sig <- fread(args$sig_res, key = "SNP")
 sig <- sig[P < args$p_thresh & (i_squared < args$i2_thresh | is.na(i_squared))]
