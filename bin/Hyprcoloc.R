@@ -178,8 +178,6 @@ VisualiseLocus <- function(inp, reference, res){
 # Prepare inputs
 inputs <- ParseInput(inp_folder = args$eqtl_folder, loci = args$loci, gene = args$gene)
 
-message(inputs)
-
 if (ncol(inputs$betas) < 2) {
 
 res <- data.table(cis_eQTL_gene = NA,
