@@ -59,7 +59,6 @@ ParseInput <- function(inp_folder, loci, gene){
 
   # Read in cis-eQTLs
   message("Reading parquet file...")
-  #ds <- arrow::open_dataset(args$eqtl_folder, partitioning = "phenotype", hive_style = TRUE)
   eqtls <- arrow::open_dataset(list.files(paste0(args$eqtl_folder, "/phenotype=", args$gene_id), full.names = TRUE))
 
   eqtls <- eqtls %>% 
@@ -88,8 +87,9 @@ ParseInput <- function(inp_folder, loci, gene){
   for (i in 1:length(genes)){
   message(paste("Read", genes[i]))
 
-  #eqtls2 <- read_parquet(list.files(paste0(args$eqtl_folder, "/phenotype=", genes[i]), full.names = TRUE))
   eqtls2 <- open_dataset(list.files(paste0(args$eqtl_folder, "/phenotype=", genes[i]), full.names = TRUE))
+
+  if(length(genes_h) < 5){
 
   eqtls2 <- eqtls2 %>% 
   filter(variant %in% snps) %>% 
@@ -101,6 +101,17 @@ ParseInput <- function(inp_folder, loci, gene){
   collect() %>% 
   as.data.table()
 
+  } else {
+
+  eqtls2 <- eqtls2 %>% 
+  filter(variant %in% snps) %>% 
+  collect() %>% 
+  select(variant, beta, standard_error) %>% 
+  collect() %>% 
+  as.data.table()
+
+  }
+
   setkey(eqtls2, variant)
   
   if(nrow(eqtls2) > 100){ #So that there are at least some variants reasonable to run.
@@ -110,6 +121,7 @@ ParseInput <- function(inp_folder, loci, gene){
   
   eqtl_beta <- merge(eqtl_beta, eqtls2[, -3, with = FALSE], by = "variant")
   eqtl_se <- merge(eqtl_se, eqtls2[, -2, with = FALSE], by = "variant")
+  message(paste(nrow(eqtl_beta), "variants in the combined matrix"))
   message(paste0(i, "/", length(genes)))
   } else {
     message("Does not make sense to include trans-gene: <100 variants after filters!")
