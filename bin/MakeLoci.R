@@ -40,7 +40,18 @@ parser$add_argument('--cis_gene_filter', metavar = 'file', type = 'character',
 
 args <- parser$parse_args()
 
-
+args <- list(reference = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2/projectfiles/data/derived_data/2023-01-28_MetaAnalysis/data/1000G-30x.parquet",
+sig_res = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/input/SigResults/subset_p5e8_hyprColocFormat_2024-05-04.csv.gz",
+eqtl_folder = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/input/sumstats/",
+gtf = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/Homo_sapiens.GRCh38.108.gtf.gz",
+lead_variant_win = 1000000,
+cis_win = 1000000,
+trans_win = 5000000,
+p_thresh = 1e-12,
+i2_thresh = 0.4,
+maxN_thresh = 0.8,
+minN_thresh = 10000
+)
 
 message("Reading in sig. results...")
 sig <- fread(args$sig_res, key = "SNP")
@@ -71,8 +82,8 @@ sig <- merge(sig, ref[, c(1:3), with = FALSE], by.x = "SNP", by.y = "ID")
 message(paste(nrow(sig), "rows among significant results, after merging with reference"))
 
 message("Filter results to genes available in full files...")
-eqtl_genes <- str_replace(list.files(args$eqtl), ".*phenotype=", "")
-sig <- sig[phenotype %in% eqtl_genes]
+#eqtl_genes <- str_replace(list.files(args$eqtl), ".*phenotype=", "")
+#sig <- sig[phenotype %in% eqtl_genes]
 message(paste(length(unique(sig$phenotype)), "genes in full results"))
 if (length(unique(sig$phenotype)) < 2){stop("Less than two genes in the full results, terminating.")}
 message("Filter results to genes available in full files...done!")
@@ -228,6 +239,13 @@ message(paste0("Done"))
 }
 
 res <- merge(cis_overlaps[, c(3, 2, 4), with = FALSE], res, by = c("cis_SNP", "cis_gene"))
+#TODO: debug why few duplicated rows were introduced
+res <- unique(as.data.frame(res))
+
+if(nrow(res[duplicated(res$cis_gene), ]) == 0){
+
 message("Saving results...")
 fwrite(res, file = "cis_trans_info.txt")
 message("Saving results...done!")
+
+} else {message("Debug!")}
