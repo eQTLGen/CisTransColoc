@@ -75,15 +75,17 @@ summary['Container Engine']                         = workflow.containerEngine
 if(workflow.containerEngine) summary['Container']   = workflow.container
 summary['Output directory']                         = params.OutputDir
 summary['eQTL results']                             = params.eqtl_files
+summary['eQTL sig. results']                        = params.sig_eqtls
 summary['Allele info file']                         = params.allele_info
 summary['GTF file']                                 = params.gtf
 summary['Pruning window']                           = params.leadvar_window
 summary['cis-eQTL window']                          = params.cis_window
 summary['trans-eQTL window']                        = params.trans_window
 summary['P threshold']                              = params.p_thresh
-summary['I2 threshold']                              = params.i2_thresh
-summary['maxN threshold']                            = params.maxN_thresh
-summary['minN threshold']                            = params.minN_thresh
+summary['I2 threshold']                             = params.i2_thresh
+summary['maxN threshold']                           = params.maxN_thresh
+summary['minN threshold']                           = params.minN_thresh
+summary['cis-eQTL filter']                          = params.cis_gene_filter
 
 // import modules
 include { MAKELOCI; COLOC; MakeLoci; Coloc } from './modules/CisTransColocalization.nf'

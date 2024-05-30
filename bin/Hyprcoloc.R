@@ -37,7 +37,7 @@ ParseInput <- function(inp_folder, loci, gene){
   
   message("Reading locus info...")
   
-  loci <- fread(args$loci, sep2 = "|")
+  loci <- fread(loci, sep2 = "|")
   setkey(loci, cis_gene)
   message("Reading locus info...done!")
   

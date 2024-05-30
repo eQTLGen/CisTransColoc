@@ -42,6 +42,14 @@ args <- parser$parse_args()
 
 message("Reading in sig. results...")
 sig <- fread(args$sig_res, key = "SNP")
+
+message("Filter results to genes available in full files...")
+eqtl_genes <- str_replace(list.files(args$eqtl), ".*phenotype=", "")
+sig <- sig[phenotype %in% eqtl_genes]
+message(paste(length(unique(sig$phenotype)), "genes in full results"))
+if (length(unique(sig$phenotype)) < 2){stop("Less than two genes in the full results, terminating.")}
+message("Filter results to genes available in full files...done!")
+
 sig <- sig[P < args$p_thresh & (i_squared < args$i2_thresh | is.na(i_squared))]
 
 sig <- sig %>% 
@@ -53,12 +61,18 @@ message(paste(nrow(sig), "rows among significant results"))
 
 message("Reading in sig. results...done!")
 
+message("Reading in SNP list in the full files...")
+snp_list  <- arrow::open_dataset(list.files(args$eqtl_folder, recursive = TRUE, full.names = TRUE)[1])
+snp_list <- snp_list %>% select(variant) %>% collect() %>% as.data.table()
+message("Reading in SNP list in the full files...done!")
+
+
 message("Reading in reference...")
 
 ref <- arrow::open_dataset(args$reference)
 
 ref <- ref %>% 
-    filter(ID %in% !!sig$SNP) %>% 
+    filter(ID %in% !!snp_list$variant) %>% 
     collect()
 
 ref <- data.table(ref, key = "ID")
@@ -67,13 +81,6 @@ message("Reading in reference...done!")
 
 sig <- merge(sig, ref[, c(1:3), with = FALSE], by.x = "SNP", by.y = "ID")
 message(paste(nrow(sig), "rows among significant results, after merging with reference"))
-
-message("Filter results to genes available in full files...")
-#eqtl_genes <- str_replace(list.files(args$eqtl), ".*phenotype=", "")
-#sig <- sig[phenotype %in% eqtl_genes]
-message(paste(length(unique(sig$phenotype)), "genes in full results"))
-if (length(unique(sig$phenotype)) < 2){stop("Less than two genes in the full results, terminating.")}
-message("Filter results to genes available in full files...done!")
 
 message("Finding lead variants for each gene...")
 LeadVariants <- sig %>% 
@@ -109,6 +116,8 @@ Lead2$type <- "interim"
 Lead2[Lead2$chr == Lead2$seqid | abs(Lead2$pos - Lead2$tss) < args$cis_win, ]$type <- "cis"
 Lead2[Lead2$chr != Lead2$seqid | abs(Lead2$pos - Lead2$tss) > args$trans_win, ]$type <- "trans"
 Lead2 <- Lead2[Lead2$type == "cis" | (Lead2$type == "trans" & Lead2$P < args$p_thresh), ]
+
+fwrite(Lead2, "eQtlLeadVariants.txt.gz", sep = "\t")
 
 message("Annotating lead variants cis/trans...done!")
 
