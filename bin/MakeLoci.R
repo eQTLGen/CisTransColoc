@@ -35,13 +35,28 @@ parser$add_argument('--minN_thresh', type = 'numeric', default = 0,
                     help = 'Minimal sample size threshold. Defaults to 0 (no filtering)')
 parser$add_argument('--cis_gene_filter', metavar = 'file', type = 'character',
                      help = 'File for filtering cis-eQTL genes included to analysis.')
-# parser$add_argument('--max_lead_distance', type = 'numeric', default = 250000,
-#                     help = 'Maximum distance between primary cis and trans lead variants.')
 
 args <- parser$parse_args()
 
+# TEMP
+args <- list(
+    reference = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2/projectfiles/data/derived_data/References/1000G-30x_index.parquet",
+    sig_res = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/input/SigResults/subset_p5e8_hyprColocFormat_2024-09-05.csv.gz",
+    eqtl_folder = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/input/sumstats/",
+    gtf = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/Homo_sapiens.GRCh38.108.gtf.gz",
+    lead_variant_win = 1000000,
+    cis_win = 1000000,
+    trans_win = 5000000,
+    p_thresh = 5e-8,
+    i2_thresh = 100,
+    maxN_thresh = 0.8,
+    minN_thresh = 0,
+    cis_gene_filter = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/data/help_input.txt"
+)
+
+
 message("Reading in sig. results...")
-sig <- fread(args$sig_res, key = "SNP")
+sig <- fread(args$sig_res, key = "variant_index")
 
 message("Filter results to genes available in full files...")
 eqtl_genes <- str_replace(list.files(args$eqtl), ".*phenotype=", "")
@@ -50,7 +65,7 @@ message(paste(length(unique(sig$phenotype)), "genes in full results"))
 if (length(unique(sig$phenotype)) < 2){stop("Less than two genes in the full results, terminating.")}
 message("Filter results to genes available in full files...done!")
 
-sig <- sig[P < args$p_thresh & (i_squared < args$i2_thresh | is.na(i_squared))]
+sig <- sig[P < args$p_thresh & (i_squared <= args$i2_thresh | is.na(i_squared))]
 
 sig <- sig %>% 
     group_by(phenotype) %>% 
@@ -62,32 +77,31 @@ message(paste(nrow(sig), "rows among significant results"))
 message("Reading in sig. results...done!")
 
 message("Reading in SNP list in the full files...")
-snp_list  <- arrow::open_dataset(list.files(args$eqtl_folder, recursive = TRUE, full.names = TRUE)[1])
-snp_list <- snp_list %>% select(variant) %>% collect() %>% as.data.table()
+snp_list  <- arrow::open_dataset(list.files(args$eqtl_folder, full.names = TRUE)[1])
+snp_list <- snp_list %>% select(variant_index) %>% collect() %>% as.data.table()
 message("Reading in SNP list in the full files...done!")
-
 
 message("Reading in reference...")
 
 ref <- arrow::open_dataset(args$reference)
 
 ref <- ref %>% 
-    filter(ID %in% !!snp_list$variant) %>% 
+    filter(variant_index %in% !!snp_list$variant_index) %>% 
     collect()
 
-ref <- data.table(ref, key = "ID")
-ref <- ref[, c(1, 5, 2, 3, 4), with = FALSE]
+ref <- data.table(ref, key = "variant_index")
+ref <- ref[, c(6, 3, 2, 4, 5), with = FALSE]
 message("Reading in reference...done!")
 
-sig <- merge(sig, ref[, c(1:3), with = FALSE], by.x = "SNP", by.y = "ID")
+sig <- merge(sig, ref[, c(1:3), with = FALSE], by = "variant_index")
 message(paste(nrow(sig), "rows among significant results, after merging with reference"))
 
 message("Finding lead variants for each gene...")
 LeadVariants <- sig %>% 
     group_by(phenotype) %>% 
     group_modify(~ IdentifyLeadSNPs(.x, 
-    snp_id_col = "SNP", 
-    snp_chr_col = "CHR", 
+    snp_id_col = "variant_index", 
+    snp_chr_col = "chromosome", 
     snp_pos_col = "bp", 
     eff_all_col = "alt_all", 
     other_all_col = "ref_all",
@@ -134,7 +148,7 @@ mutate(region_start = tss - args$cis_win,
 region_end = tss + args$cis_win) %>% as.data.table()
 
 message("Filter input to predefined cis genes.")
-cis_filter <- fread(args$cis_gene_filter, header = FALSE)
+cis_filter <- fread(args$cis_gene_filter, header = TRUE)
 
 if(nrow(cis_filter) > 0) {
 
@@ -150,11 +164,14 @@ if(nrow(cis_filter) > 0) {
 Lead2 <- as.data.table(Lead2)
 cis_genes <- as.data.table(cis_genes)
 
-setkeyv(ref, c("CHR", "bp"))
+setkeyv(ref, c("chromosome", "bp"))
 
-cis_genes <- data.table(cis_gene = cis_genes$phenotype, 
-cis_SNP = cis_genes$SNP, chr = cis_genes$seqid, start = cis_genes$region_start, 
-end = cis_genes$region_end)
+cis_genes <- data.table(
+    cis_gene = cis_genes$phenotype, 
+    cis_SNP = cis_genes$SNP, 
+    chr = cis_genes$seqid, 
+    start = cis_genes$region_start, 
+    end = cis_genes$region_end)
 
 cis_genes$chr <- as.factor(cis_genes$chr)
 setkey(cis_genes, chr, start, end)
@@ -165,9 +182,12 @@ filter(type == "trans") %>%
 mutate(snp_start = pos,
 snp_end = pos + 1) %>% as.data.table()
 
-trans_genes <- data.table(trans_gene = trans_genes$phenotype, 
-trans_SNP = trans_genes$SNP, chr = trans_genes$chr, start = trans_genes$snp_start, 
-end = trans_genes$snp_end)
+trans_genes <- data.table(
+    trans_gene = trans_genes$phenotype, 
+    trans_SNP = trans_genes$SNP, 
+    chr = trans_genes$chr, 
+    start = trans_genes$snp_start, 
+    end = trans_genes$snp_end)
 
 trans_genes$chr <- as.factor(trans_genes$chr)
 setkey(trans_genes, chr, start, end)
@@ -177,14 +197,19 @@ print(head(trans_genes))
 
 cis_overlaps <- foverlaps(trans_genes, cis_genes, type = "within", nomatch = NULL)
 
-cis_overlaps <- cis_overlaps[, .(cis_gene = unique(cis_gene), cis_SNP = unique(cis_SNP), 
-                                 trans_genes = list(unique(trans_gene)), chr = unique(chr), 
-                                 start = unique(start), end = unique(end)), by = cis_gene]
+cis_overlaps <- cis_overlaps[, .(
+    cis_gene = unique(cis_gene), 
+    cis_SNP = unique(cis_SNP), 
+    trans_genes = list(unique(trans_gene)), 
+    chr = unique(chr), 
+    start = unique(start), 
+    end = unique(end)), 
+    by = cis_gene]
 
 setkey(cis_overlaps, chr, start, end)
 message("Finding overlapping trans loci...done!")
 
-ref <- data.table(SNP = ref$ID, chr = ref$CHR, start = ref$bp, 
+ref <- data.table(SNP = ref$variant_index, chr = ref$chromosome, start = ref$bp, 
 end = ref$bp + 1)
 ref$chr <- as.factor(ref$chr)
 setkey(ref, chr, start, end)

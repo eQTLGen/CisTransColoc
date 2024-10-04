@@ -54,28 +54,28 @@ ParseInput <- function(inp_folder, loci, gene){
 
   # Parse SNP list
   message("Parsing SNP list...")
-  snps <- unlist(strsplit(loci$SNPs, "|", fixed = TRUE))
+  snps <- as.integer(unlist(strsplit(loci$SNPs, "|", fixed = TRUE)))
   message("Parsing SNP list...done!")
 
   # Read in cis-eQTLs
-  message("Reading parquet file...")
-  eqtls <- arrow::open_dataset(list.files(paste0(args$eqtl_folder, "/phenotype=", args$gene_id), full.names = TRUE))
+  message("Reading cis-eQTL parquet file...")
+  eqtls <- arrow::open_dataset(list.files(paste0(inp_folder, "/phenotype=", gene), full.names = TRUE))
 
   eqtls <- eqtls %>% 
-  filter(variant %in% snps) %>% 
+  filter(variant_index %in% snps) %>% 
   collect() %>%
-  filter((i_squared < args$i2_thresh | is.na(i_squared)) & 
+  filter((i_squared <= args$i2_thresh | is.na(i_squared)) & 
   sample_size >= args$maxN_thresh * max(sample_size) & 
   sample_size >= args$minN_thresh) %>% 
   as.data.table()
 
-  message("cis-eQTLs read in!")
+  message("Reading cis-eQTL parquet file...done!")
   message(paste(nrow(eqtls), "variants in the data!"))
   
   # Make beta and se matrix
   message("Make beta and se matrices...")
-  eqtl_beta <- data.table(variant = eqtls$variant, eqtls$beta)
-  eqtl_se <- data.table(variant = eqtls$variant, eqtls$standard_error)
+  eqtl_beta <- data.table(variant = eqtls$variant_index, eqtls$beta)
+  eqtl_se <- data.table(variant = eqtls$variant_index, eqtls$standard_error)
 
   rm(eqtls)
   gc()
@@ -92,35 +92,35 @@ ParseInput <- function(inp_folder, loci, gene){
   if(length(genes_h) < 5){
 
   eqtls2 <- eqtls2 %>% 
-  filter(variant %in% snps) %>% 
+  filter(variant_index %in% snps) %>% 
   collect() %>% 
   filter((i_squared < args$i2_thresh | is.na(i_squared)) & 
   sample_size >= args$maxN_thresh * max(sample_size) & 
   sample_size >= args$minN_thresh) %>% 
-  select(variant, beta, standard_error) %>% 
+  select(variant_index, beta, standard_error) %>% 
   collect() %>% 
   as.data.table()
 
   } else {
 
   eqtls2 <- eqtls2 %>% 
-  filter(variant %in% snps) %>% 
+  filter(variant_index %in% snps) %>% 
   collect() %>% 
-  select(variant, beta, standard_error) %>% 
+  select(variant_index, beta, standard_error) %>% 
   collect() %>% 
   as.data.table()
 
   }
 
-  setkey(eqtls2, variant)
+  setkey(eqtls2, variant_index)
   
   if(nrow(eqtls2) > 100){ #So that there are at least some variants reasonable to run.
 
   colnames(eqtls2)[2:3] <- paste0(genes[i], "_",  colnames(eqtls2)[2:3])
   print(nrow(eqtls2))
   
-  eqtl_beta <- merge(eqtl_beta, eqtls2[, -3, with = FALSE], by = "variant")
-  eqtl_se <- merge(eqtl_se, eqtls2[, -2, with = FALSE], by = "variant")
+  eqtl_beta <- merge(eqtl_beta, eqtls2[, -3, with = FALSE], by.x = "variant", by.y = "variant_index")
+  eqtl_se <- merge(eqtl_se, eqtls2[, -2, with = FALSE], by.x = "variant", by.y = "variant_index")
   message(paste(nrow(eqtl_beta), "variants in the combined matrix"))
   message(paste0(i, "/", length(genes)))
   } else {
