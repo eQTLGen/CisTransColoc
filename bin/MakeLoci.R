@@ -116,6 +116,11 @@ message("Finding lead variants for each gene...done!")
 rm(sig)
 gc()
 
+message("Removing lead variants mapping to MHC region...")
+message(paste(nrow(LeadVariants[LeadVariants$chr == 6 & LeadVariants$pos > 25000000 & LeadVariants$pos < 34000000, ]), "such variants removed."))
+LeadVariants <- LeadVariants[!(LeadVariants$chr == 6 & LeadVariants$pos > 25000000 & LeadVariants$pos < 34000000), ]
+message("Removing lead variants mapping to MHC region...done!")
+
 # Annotate cis/trans
 message("Annotating lead variants to cis/trans...")
 ensg <- readGFF(args$gtf)
