@@ -1,10 +1,7 @@
 name: pqtlvseqtl
 channels:
-  - defaults
   - conda-forge
   - bioconda
-  - r
-  - anaconda
 dependencies:
   - conda-forge::r-devtools=2.4.4
   - conda-forge::r-data.table=1.14.2
@@ -21,4 +18,5 @@ dependencies:
   - mpfr=4.1.0
   - bioconda::bioconductor-rtracklayer
   - conda-forge::r-r.utils=2.12.0
+  - conda-forge::r-patchwork
 prefix: ./GwasHyprColoc

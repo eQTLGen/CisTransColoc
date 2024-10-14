@@ -9,6 +9,7 @@ library(IGUtilityPackage)
 library(ggplot2)
 library(tidyr)
 library(rtracklayer)
+library(patchwork)
 
 parser <- ArgumentParser(description = 'Run HyprColoc for every cis-eQTL locus to detect colocalisation between cis- and trans-eQTL.')
 
@@ -20,6 +21,8 @@ parser$add_argument('--eqtl_folder', metavar = 'file', type = 'character',
 help = 'eQTLGen parquet folder format with per gene output files.')
 parser$add_argument('--gtf', metavar = 'file', type = 'character',
                     help = "ENSEMBL .gtf file, needs to be hg38.")
+parser$add_argument('--reference', metavar = 'file', type = 'character',
+                    help = 'eQTLGen SNP reference file in parquet format.')
 parser$add_argument('--i2_thresh', type = 'numeric', default = 40,
                     help = 'Heterogeneity threshold. Defaults to <40%.')
 parser$add_argument('--maxN_thresh', type = 'numeric', default = 0.8,
@@ -28,9 +31,13 @@ parser$add_argument('--minN_thresh', type = 'numeric', default = 0,
                     help = 'Minimal sample size threshold. Defaults to 0 (no filtering)')
 parser$add_argument('--output', metavar = 'file', type = 'character', 
 help = 'Output file.')
-#parser$add_argument('--locusplot', type = 'logical', action = 'store_false')
+parser$add_argument('--locusplot', type = 'logical', help = "Whether to output locus plot.")
+parser$add_argument('--WriteRegionOut', type = 'logical', help = "Whether to output region-specific sumstats.")
 
 args <- parser$parse_args()
+
+args$locusplot[args$locusplot == "true"] <- TRUE
+args$locusplot[args$locusplot == "false"] <- FALSE
 
 # Functions
 ParseInput <- function(inp_folder, loci, gene){
@@ -147,32 +154,108 @@ ParseInput <- function(inp_folder, loci, gene){
   message("Make beta and se matrices...done!")
 }
 
-VisualiseLocus <- function(inp, reference, res){
-  inputs <- inp
+VisualiseLocus <- function(inputs, reference, gtf, ld = NULL){
+
+  PlotRegionGenes <- function(chr, pos_start, pos_end, gtf, line, limit1, limit2){
+
+    gtf <- gtf[gtf$type %in% c("gene"), c(3, 1, 4, 5, 7, 9, 11, 13, 22)]
+    gtf <- as.data.table(gtf)
+
+    gtf_f <- gtf[seqid %in% chr & start > pos_start & end < pos_end]
+    gtf_f <- gtf_f[gtf_f$gene_biotype %in% c("protein_coding", "lncRNA", "miRNA"), ]
+    gtf_f$line <- c(rep(seq(from = 1, to = 10), times = floor(nrow(gtf_f)/10)), 1:(nrow(gtf_f) - floor(nrow(gtf_f)/10) * 10))
+
+    gtf_f$start2 <- gtf_f$start
+    gtf_f$end2 <- gtf_f$end
+
+    gtf_f[gtf_f$strand == "-", ]$start2 <- gtf_f[gtf_f$strand == "-", ]$end
+    gtf_f[gtf_f$strand == "-", ]$end2 <- gtf_f[gtf_f$strand == "-", ]$start
+    gtf_f[is.na(gtf_f$gene_name), ]$gene_name <- gtf_f[is.na(gtf_f$gene_name), ]$gene_id
+
+    p <- ggplot(gtf_f, aes(x = start2, y = line, xend = end2, yend = line, colour = gene_biotype, label = gene_name)) +
+      geom_segment(arrow = arrow(length = unit(0.20, "cm"), ends = "last", type = "closed")) +
+      theme_bw() + guides(y = "none") + labs(y = NULL) + xlab(paste0("chr", unique(gtf_f$seqid), " bp")) +
+      geom_text(size = 2, nudge_y = 0.4) +
+      scale_color_manual(values = c("protein_coding" = "salmon",
+                                    "lncRNA" = "steelblue",
+                                    "miRNA" = "darkgreen")) +
+      scale_x_continuous(limits = c(limit1, limit2)) +
+      guides(color = "none") +
+      geom_vline(xintercept = line, colour = "red")
+
+    return(p)
+
+  }
+
+
+  message("Loading variant reference...")
+
+  snp_ind <- rownames(inputs$betas)
+
   ref <- arrow::open_dataset(reference) %>%
-    select("ID", "CHR", "bp", "str_allele1", "str_allele2") %>% collect() %>% as.data.table()
-  message("Reference loaded")
-  setkey(ref, ID)
-  
+    filter(variant_index %in% snp_ind) %>%
+    select("variant_index", "chromosome", "bp", "non_eff_allele", "eff_allele") %>%
+    collect() %>%
+    as.data.table()
+
+  message("Loading variant reference...done!")
+
+  message("Indexing variant reference...")
+  setkey(ref, variant_index)
+  message("Indexing variant reference...done!")
+
+  message("Loading gene reference...")
+  gtf <- readGFF(gtf)
+  gtf2 <- as.data.table(unique(gtf[, c(9, 11)]))
+  message("Loading gene reference...done!")
+
   P_table <- data.table(ZtoP(inputs$betas/inputs$standard_errors, largeZ = TRUE))
-  P_table$ID <- rownames(inputs$betas)
-  setkey(P_table, ID)
-  
-  ref2 <- ref[ID %in% P_table$ID, c(1, 3), with = FALSE]
-  
+  P_table$variant_index <- rownames(inputs$betas)
+  P_table$variant_index <- as.integer(P_table$variant_index)
+
+  setkey(P_table, variant_index)
+
+  ref2 <- ref[variant_index %in% P_table$variant_index, c(1, 2, 3), with = FALSE]
+  ref2$variant_index <- as.integer(ref2$variant_index)
+
   cis_gene <- colnames(P_table)[1]
-  
-  P_table <- merge(P_table, ref2, by = "ID")
-  P_table <- P_table[order(P_table$ID)]
-  P_table <- melt(P_table, id.vars = c("ID", "bp"))
+
+  P_table <- merge(P_table, ref2, by = "variant_index")
+  P_table <- P_table[order(P_table$variant_index)]
+  P_table <- melt(P_table, id.vars = c("variant_index", "bp", "chromosome"))
   lead_var_pos <- P_table[variable == cis_gene, ]
   lead_var_pos <- lead_var_pos[value == max(value)]$bp
-  
-  ggplot(P_table, aes(x = bp, y = value)) + 
+
+  P_table <- merge(P_table, gtf2, by.x = "variable", by.y = "gene_id")
+  rm(gtf2)
+  P_table$type <- "trans"
+  P_table[variable == cis_gene, ]$type <- "cis"
+  P_table[, variable := paste0(gene_name, " ", variable)]
+
+  if (!is.null(ld)){
+    P_table <- merge(P_table, ld, by = "variant_index", all.x = TRUE)
+    P_table[is.na(R2), ]$R2 <- 0
+
+    p1 <- ggplot(P_table, aes(x = bp, y = value)) +
+      geom_point(shape = 21, colour = "black", aes(fill = R2)) + theme_bw() +
+      facet_wrap(~type * variable, ncol = 1, scales = "free") + ylab("-log10(P)") + xlab("") +
+      geom_vline(xintercept = lead_var_pos, colour = "red") + guides(fill = "none") +
+      scale_fill_gradient(low = "white", high = "red")
+
+  } else {
+  p1 <- ggplot(P_table, aes(x = bp, y = value)) +
     geom_point(alpha = 0.4, shape = 21, colour = "black", fill = "grey") + theme_bw() +
-    facet_wrap(~variable, ncol = 1, scales = "free") + ylab("-log10(P)") + 
+    facet_wrap(~type * variable, ncol = 1, scales = "free") + ylab("-log10(P)") + xlab("") +
     geom_vline(xintercept = lead_var_pos, colour = "red")
-  
+  }
+  p2 <- PlotRegionGenes(chr = unique(P_table$chromosome), pos_start = min(P_table$bp), pos_end = max(P_table$bp),
+                        gtf = gtf,
+                        line = lead_var_pos,
+                        limit1 = min(P_table$bp), limit2 = max(P_table$bp))
+
+  p <- p1 / p2 + plot_layout(heights = c(6, 1))
+
+  return(list(p, lead_var_pos))
 }
 
 # Prepare inputs
@@ -209,6 +292,7 @@ trait_names <- colnames(inputs$betas)
 # TODO: check why such variants are in the results
 any_row_contains_zero <- apply(inputs$standard_errors, 1, function(row) any(row != 0))
 
+
 message("Running hyprcoloc analysis...")
 res <- hyprcoloc(inputs$betas[any_row_contains_zero, ], 
                  inputs$standard_errors[any_row_contains_zero, ], 
@@ -235,18 +319,19 @@ res$nr_snps_included <- nrow(inputs$betas)
 
 message("Annotating results...")
 gtf <- readGFF(args$gtf)
-gtf <- as.data.table(unique(gtf[, c(9, 11)]))
+gtf <- as.data.table(gtf)
+gtf2 <- as.data.table(unique(gtf[, c(9, 11)]))
 
 res <- res %>% 
 separate_rows(traits, sep = "\\| ") %>% 
 mutate(traits = str_trim(traits))
 
-res <- merge(res, gtf, by.x = "cis_eQTL_gene", by.y = "gene_id", all.x = TRUE)
+res <- merge(res, gtf2, by.x = "cis_eQTL_gene", by.y = "gene_id", all.x = TRUE)
 
 res <- res[, c(1, 11, 2:10)]
 colnames(res)[2] <- "cis_eQTL_gene_name"
 
-res <- merge(res, gtf, by.x = "traits", by.y = "gene_id", all.x = TRUE)
+res <- merge(res, gtf2, by.x = "traits", by.y = "gene_id", all.x = TRUE)
 res <- res[, c(2:5, 1, 12, 6:11)]
 colnames(res)[c(5, 6)] <- c("trans_eQTL_gene", "trans_eQTL_gene_name")
 res <- res[order(res$cis_eQTL_gene, res$type, res$iteration), ]
@@ -257,9 +342,40 @@ message("Writing output...")
 fwrite(res, args$output, sep = "\t")
 message("Writing output...done!")
 
-#visualise
-#if (isTRUE(args$locusplot)){
-#VisualiseLocus(inp = inputs, reference = args$ref)
-#ggsave(paste0(cis_eQTL_gene, ".pdf"), height = 15, width = 10, units = "in")
-#}
+# Visualise
+if (isTRUE(args$locusplot)){
+  message("Writing out plot(s)...")
+  if (ncol(inputs$betas) <= 10){
+    p <- VisualiseLocus(inputs = inputs, reference = args$reference, gtf = gtf)
+    ggsave(paste0(args$gene, ".png"), height = 15, width = 10, units = "in")
+  } else {
+      # Define the number of columns you want to select each time (excluding the first column)
+      num_cols <- 9
+
+      # Get the total number of columns in your dataframe
+      total_cols <- ncol(inputs$betas)
+
+      # Create a loop that selects 1 + num_cols at a time (first column + next num_cols columns)
+      for (i in seq(2, total_cols, by = num_cols)) {
+        # Calculate the range of columns for the current iteration
+        col_range <- i:min(i + num_cols - 1, total_cols)  # Ensure we don't exceed the total number of columns
+        inputs_temp <- list(
+          betas = inputs$betas[, c(1, col_range)],
+          standard_errors = inputs$standard_errors[, c(1, col_range)]
+        )
+
+      p <- VisualiseLocus(inputs = inputs_temp, reference = args$reference, gtf = gtf)
+      ggsave(paste0(args$gene, "_", col_range, ".png"), height = 15, width = 10, units = "in")
+      }
+
+  }
+  message("Writing out plot(s)...done!")
+}
+}
+
+# Write out regional sumstats
+if (isTRUE(args$WriteRegionOut)){
+  message("Writing out region-specific-sumstats...")
+  saveRDS(inputs, file = paste0(args$gene, "_region.Rds"))
+  message("Writing out region-specific-sumstats...done!")
 }

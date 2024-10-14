@@ -38,6 +38,8 @@ Optional arguments:
 --maxN_thresh               Per gene maximal sample size threshold to include variants. Defaults to 0.8 (SNPs with >=0.8*max(N))
 --minN_thresh               Minimal sample size threshold. Defaults to 0 (no filtering)
 --cis_gene_filter           Optional filter for the cis-eQTL genes. By default, all genes are queried.
+--plot                      Plot colocalising loci on regional plot. Use only with cis gene filter and on a few cis-eQTL genes at a time! Defaults to false.
+--WriteRegionsOut           Write out region-specific sumstats. Use only with cis gene filter and on a few cis-eQTL genes at a time! Defaults to false.
 """.stripIndent()
 
 }
@@ -57,7 +59,8 @@ params.i2_thresh = 40
 params.maxN_thresh = 0.8
 params.minN_thresh = 0
 params.cis_gene_filter = 'data/help_input.txt'
-
+params.plot = false
+params.WriteRegionsOut = false
 
 //Show parameter values
 log.info """=======================================================
@@ -86,7 +89,8 @@ summary['I2 threshold']                             = params.i2_thresh
 summary['maxN threshold']                           = params.maxN_thresh
 summary['minN threshold']                           = params.minN_thresh
 summary['cis-eQTL filter']                          = params.cis_gene_filter
-
+summary['Locus plot']                               = params.plot
+summary['Write regions out']                        = params.WriteRegionsOut
 // import modules
 include { MAKELOCI; COLOC; MakeLoci; Coloc } from './modules/CisTransColocalization.nf'
 
@@ -111,9 +115,11 @@ p_thresh = Channel.value(params.p_thresh)
 i2_thresh = Channel.value(params.i2_thresh)
 maxN_thresh = Channel.value(params.maxN_thresh)
 minN_thresh = Channel.value(params.minN_thresh)
+plot = Channel.value(params.plot)
+WriteRegion = Channel.value(params.WriteRegionsOut)
 
 input_ch = input_ch.combine(leadvar_window).combine(cis_window).combine(trans_window)
-.combine(p_thresh).combine(i2_thresh).combine(maxN_thresh).combine(minN_thresh)
+.combine(p_thresh).combine(i2_thresh).combine(maxN_thresh).combine(minN_thresh).combine(plot).combine(WriteRegion)
 
 
 workflow {
@@ -131,7 +137,7 @@ workflow {
         coloc_input_ch = MAKELOCI.out.combine(genes)
         
         COLOC(coloc_input_ch)
-        COLOC.out.flatten().collectFile(name: 'CisTransColocResults.txt', keepHeader: true, sort: true, storeDir: "${params.OutputDir}")
+        COLOC.out.flatten().filter { it.name.endsWith('_coloc.txt') }.collectFile(name: 'CisTransColocResults.txt', keepHeader: true, sort: true, storeDir: "${params.OutputDir}")
         }
 
 

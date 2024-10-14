@@ -6,10 +6,10 @@ process MakeLoci {
     publishDir "${params.OutputDir}", mode: 'copy', overwrite: true, pattern: "cis_trans_info.txt"
 
     input:
-        tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN)
+        tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), val(plot), val(WriteRegion)
 
     output:
-       tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), path("cis_trans_info.txt")
+       tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), val(plot), val(WriteRegion), path("cis_trans_info.txt")
 
     script:
         """
@@ -32,23 +32,34 @@ process MakeLoci {
 process Coloc {
     tag "${gene}"
     input:
-        tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), path(loci), val(gene)
+        tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), val(plot), val(WriteRegion), path(loci), val(gene)
 
     output:
-        path("*_coloc.txt")
+        tuple path("*_coloc.txt"), path("*png"), path("*region.Rds") optional true
+
+    if (params.plot) {
+        publishDir "${params.OutputDir}", mode: 'move', overwrite: true, pattern: "*.png"
+    } else {}
+    if (params.WriteRegionsOut) {
+        publishDir "${params.OutputDir}", mode: 'move', overwrite: true, pattern: "*region.Rds"
+    } else {}
 
     script:
         """
         Hyprcoloc.R \
         --gene_id ${gene} \
         --i2_thresh ${i2} \
+        --reference ${ref} \
         --maxN_thresh ${maxN} \
         --minN_thresh ${minN} \
         --loci ${loci} \
         --eqtl_folder ${eqtls} \
         --gtf ${gtf} \
-        --output ${gene}_coloc.txt
+        --output ${gene}_coloc.txt \
+        --locusplot ${plot} \
+        --WriteRegionOut ${WriteRegion}
         """
+
 }
 
 workflow MAKELOCI {
