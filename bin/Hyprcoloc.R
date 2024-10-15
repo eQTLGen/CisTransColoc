@@ -39,6 +39,9 @@ args <- parser$parse_args()
 args$locusplot[args$locusplot == "true"] <- TRUE
 args$locusplot[args$locusplot == "false"] <- FALSE
 
+args$WriteRegionOut[args$WriteRegionOut == "true"] <- TRUE
+args$WriteRegionOut[args$WriteRegionOut == "false"] <- FALSE
+
 # Functions
 ParseInput <- function(inp_folder, loci, gene){
   
