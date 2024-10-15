@@ -137,6 +137,7 @@ region_end = tss + args$cis_win) %>% as.data.table()
 
 message("Filter input to predefined cis genes.")
 cis_filter <- fread(args$cis_gene_filter, header = FALSE)
+cis_filter <- cis_filter[str_detect(cis_filter$V1, "ENSG")]
 
 if(nrow(cis_filter) > 0) {
 

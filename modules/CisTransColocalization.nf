@@ -35,7 +35,7 @@ process Coloc {
         tuple path(sig_res), path(eqtls), path(ref), path(gtf), path(cis_filter), val(lead_variant_win), val(cis_win), val(trans_win), val(p_thresh), val(i2), val(maxN), val(minN), val(plot), val(WriteRegion), path(loci), val(gene)
 
     output:
-        tuple path("*_coloc.txt"), path("*region.Rds") optional true
+        path("ENSG*")
 
     if (params.plot) {
         publishDir "${params.OutputDir}", mode: 'copy', overwrite: true, pattern: "*.png"
