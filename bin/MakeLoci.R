@@ -136,7 +136,7 @@ mutate(region_start = tss - args$cis_win,
 region_end = tss + args$cis_win) %>% as.data.table()
 
 message("Filter input to predefined cis genes.")
-cis_filter <- fread(args$cis_gene_filter, header = TRUE)
+cis_filter <- fread(args$cis_gene_filter, header = FALSE)
 
 if(nrow(cis_filter) > 0) {
 
