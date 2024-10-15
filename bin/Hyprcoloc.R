@@ -154,6 +154,7 @@ ParseInput <- function(inp_folder, loci, gene){
   message("Make beta and se matrices...done!")
 }
 
+
 VisualiseLocus <- function(inputs, reference, gtf, ld = NULL){
 
   PlotRegionGenes <- function(chr, pos_start, pos_end, gtf, line, limit1, limit2){
@@ -174,8 +175,8 @@ VisualiseLocus <- function(inputs, reference, gtf, ld = NULL){
 
     p <- ggplot(gtf_f, aes(x = start2, y = line, xend = end2, yend = line, colour = gene_biotype, label = gene_name)) +
       geom_segment(arrow = arrow(length = unit(0.20, "cm"), ends = "last", type = "closed")) +
-      theme_bw() + guides(y = "none") + labs(y = NULL) + xlab(paste0("chr", unique(gtf_f$seqid), " bp")) +
-      geom_text(size = 2, nudge_y = 0.4) +
+      theme_bw() + guides(y = "none") + labs(y = NULL) + xlab(paste0("chr", unique(gtf_f$seqid), " position (bp)")) +
+      geom_text(size = 1.5, nudge_y = 0.4) +
       scale_color_manual(values = c("protein_coding" = "salmon",
                                     "lncRNA" = "steelblue",
                                     "miRNA" = "darkgreen")) +
@@ -233,6 +234,7 @@ VisualiseLocus <- function(inputs, reference, gtf, ld = NULL){
   P_table[, variable := paste0(gene_name, " ", variable)]
 
   if (!is.null(ld)){
+    if (nrow(ld) < 1){message("Proxies file is empty!")}
     P_table <- merge(P_table, ld, by = "variant_index", all.x = TRUE)
     P_table[is.na(R2), ]$R2 <- 0
 

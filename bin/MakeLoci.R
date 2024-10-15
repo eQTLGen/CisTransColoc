@@ -38,23 +38,6 @@ parser$add_argument('--cis_gene_filter', metavar = 'file', type = 'character',
 
 args <- parser$parse_args()
 
-# TEMP
-args <- list(
-    reference = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2/projectfiles/data/derived_data/References/1000G-30x_index.parquet",
-    sig_res = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/input/SigResults/subset_p5e8_hyprColocFormat_2024-09-05.csv.gz",
-    eqtl_folder = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/input/sumstats/",
-    gtf = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/tests/Homo_sapiens.GRCh38.108.gtf.gz",
-    lead_variant_win = 1000000,
-    cis_win = 1000000,
-    trans_win = 5000000,
-    p_thresh = 5e-8,
-    i2_thresh = 100,
-    maxN_thresh = 0.8,
-    minN_thresh = 0,
-    cis_gene_filter = "/Users/urmovosa/Documents/projects/2019/eQTLGenPhase2_pipelines/eQTLGenCisTransColoc/data/help_input.txt"
-)
-
-
 message("Reading in sig. results...")
 sig <- fread(args$sig_res, key = "variant_index")
 
